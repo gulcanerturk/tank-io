@@ -66,6 +66,33 @@
   #crosshair { position:fixed; width:20px; height:20px; pointer-events:none; z-index:50; transform:translate(-50%,-50%); }
 
   #ping-display { position:absolute; bottom:8px; left:8px; font-size:9px; color:rgba(255,255,255,0.2); letter-spacing:1px; }
+
+  /* Mobile controls */
+  #mobile-controls { display:none; position:fixed; inset:0; pointer-events:none; z-index:20; }
+  #joystick-zone { position:absolute; bottom:30px; left:30px; width:130px; height:130px; pointer-events:all; }
+  #joystick-base { width:130px; height:130px; background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.2); border-radius:50%; position:absolute; }
+  #joystick-thumb { width:52px; height:52px; background:rgba(58,240,192,0.5); border:2px solid #3af0c0; border-radius:50%; position:absolute; top:39px; left:39px; transition:background 0.1s; }
+  #fire-btn { position:absolute; bottom:50px; right:40px; width:80px; height:80px; background:rgba(255,68,102,0.3); border:2px solid #ff4466; border-radius:50%; pointer-events:all; display:flex; align-items:center; justify-content:center; font-family:'Orbitron',monospace; font-size:11px; color:#ff4466; font-weight:700; letter-spacing:1px; user-select:none; }
+  #fire-btn.active { background:rgba(255,68,102,0.6); }
+  #upgrade-btn-mobile { position:absolute; bottom:50px; right:140px; width:60px; height:60px; background:rgba(58,240,192,0.2); border:2px solid #3af0c0; border-radius:50%; pointer-events:all; display:flex; align-items:center; justify-content:center; font-size:9px; color:#3af0c0; font-family:'Orbitron',monospace; font-weight:700; letter-spacing:1px; text-align:center; line-height:1.2; user-select:none; }
+  #mobile-upgrade-panel { position:fixed; bottom:160px; right:20px; display:none; flex-direction:column; gap:5px; pointer-events:all; z-index:30; }
+  #mobile-upgrade-panel.visible { display:flex; }
+  .mob-upg-btn { background:rgba(10,14,26,0.92); border:1px solid rgba(58,240,192,0.4); color:#3af0c0; font-family:'Share Tech Mono',monospace; font-size:11px; padding:8px 12px; cursor:pointer; border-radius:6px; min-width:160px; text-align:left; }
+  .mob-upg-btn:disabled { opacity:0.3; }
+
+  @media (max-width: 768px) or (pointer: coarse) {
+    body { cursor:default; }
+    #crosshair { display:none; }
+    #mobile-controls { display:block; }
+    #upgrade-panel { display:none; }
+    #minimap { width:70px; height:70px; bottom:170px; }
+    #hud { bottom:170px; }
+    #hud #xp-bar-wrap, #hud #health-bar-wrap { width:220px; }
+    #leaderboard { display:none; }
+    #player-count { display:none; }
+    #score-display { top:12px; right:12px; }
+    #score-value { font-size:20px; }
+  }
 </style>
 </head>
 <body>
@@ -122,6 +149,25 @@
   <div id="kill-feed"></div>
   <div id="player-count">0 oyuncu online</div>
   <div id="ping-display">ping: --ms</div>
+</div>
+
+<!-- Mobile controls -->
+<div id="mobile-controls">
+  <div id="joystick-zone">
+    <div id="joystick-base"></div>
+    <div id="joystick-thumb"></div>
+  </div>
+  <div id="fire-btn">ATEŞ</div>
+  <div id="upgrade-btn-mobile" onclick="toggleMobileUpgrade()">UPG<br>RADE</div>
+  <div id="mobile-upgrade-panel">
+    <button class="mob-upg-btn" onclick="doUpgrade('bulletSpeed');toggleMobileUpgrade()">MERMİ HIZI <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('bulletDamage');toggleMobileUpgrade()">MERMİ HASARI <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('fireRate');toggleMobileUpgrade()">ATEŞ HIZI <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('bodyDamage');toggleMobileUpgrade()">VÜCUT HASARI <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('maxHealth');toggleMobileUpgrade()">MAX CAN <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('moveSpeed');toggleMobileUpgrade()">HAREKET HIZI <span class="pts2"></span></button>
+    <button class="mob-upg-btn" onclick="doUpgrade('bulletCount');toggleMobileUpgrade()">ÇİFT NAMLU <span class="pts2"></span></button>
+  </div>
 </div>
 
 <div id="death-screen">
@@ -454,6 +500,18 @@ function updateUpgradePanel() {
     else { btn.disabled=myUpgradePoints<=0; pts.textContent=`[${lv}/7]`; }
   });
   document.getElementById('points-display').textContent = myUpgradePoints + ' PUAN';
+
+  // Mobile upgrade buttons
+  const mobBtns = document.querySelectorAll('.mob-upg-btn');
+  mobBtns.forEach((btn,i) => {
+    const k = statKeys[i];
+    const lv = myUpgrades[k]||0;
+    const pts = btn.querySelector('.pts2');
+    if(pts) pts.textContent = lv>=7 ? '[MAX]' : `[${lv}/7]`;
+    btn.disabled = lv>=7 || myUpgradePoints<=0;
+  });
+  const upEl = document.getElementById('upgrade-btn-mobile');
+  if(upEl) upEl.style.borderColor = myUpgradePoints>0 ? '#ffdd44' : '#3af0c0';
 }
 
 function shadeColor(hex,pct) {
@@ -508,6 +566,87 @@ document.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 document.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>{canvas.width=window.innerWidth;canvas.height=window.innerHeight;});
 document.getElementById('name-input').addEventListener('keydown',e=>{if(e.key==='Enter')startGame();});
+
+// Mobile joystick
+const joystickZone = document.getElementById('joystick-zone');
+const joystickThumb = document.getElementById('joystick-thumb');
+const fireBtn = document.getElementById('fire-btn');
+let joystickActive = false;
+let joystickOrigin = {x:0,y:0};
+let joystickDelta = {x:0,y:0};
+const JOY_RADIUS = 39;
+
+function isMobile() { return window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768; }
+
+joystickZone.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  joystickActive = true;
+  const t = e.touches[0];
+  const rect = joystickZone.getBoundingClientRect();
+  joystickOrigin = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+}, {passive:false});
+
+joystickZone.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  if (!joystickActive) return;
+  const t = e.touches[0];
+  let dx = t.clientX - joystickOrigin.x;
+  let dy = t.clientY - joystickOrigin.y;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist > JOY_RADIUS) { dx=dx/dist*JOY_RADIUS; dy=dy/dist*JOY_RADIUS; }
+  joystickDelta = {x:dx,y:dy};
+  joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
+}, {passive:false});
+
+joystickZone.addEventListener('touchend', e=>{
+  e.preventDefault();
+  joystickActive = false;
+  joystickDelta = {x:0,y:0};
+  joystickThumb.style.transform = 'translate(0,0)';
+}, {passive:false});
+
+// Fire button
+fireBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys['mouse']=true; fireBtn.classList.add('active'); }, {passive:false});
+fireBtn.addEventListener('touchend',   e=>{ e.preventDefault(); keys['mouse']=false; fireBtn.classList.remove('active'); }, {passive:false});
+
+// Aim with right side touch (anywhere not joystick/fire)
+canvas.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  for(const t of e.touches) {
+    if(t.clientX > window.innerWidth/2) {
+      mouse.x = t.clientX;
+      mouse.y = t.clientY;
+    }
+  }
+},{passive:false});
+
+// Override input loop for mobile joystick
+const _origInputInterval = setInterval;
+// Patch mobile dx/dy into socket input
+const origSetInterval = window.setInterval;
+let mobileInputPatch = false;
+if (!mobileInputPatch) {
+  mobileInputPatch = true;
+  setInterval(() => {
+    if (!gameStarted || !isMobile()) return;
+    const me = gameState.players?.[myId];
+    if (!me || !me.alive) return;
+    let dx = 0, dy = 0;
+    if (joystickActive && (joystickDelta.x!==0||joystickDelta.y!==0)) {
+      dx = joystickDelta.x / JOY_RADIUS;
+      dy = joystickDelta.y / JOY_RADIUS;
+    }
+    const wx = mouse.x + camera.x;
+    const wy = mouse.y + camera.y;
+    const angle = Math.atan2(wy - me.y, wx - me.x);
+    socket.emit('input', { dx, dy, angle, shooting: keys['mouse'] });
+  }, 16);
+}
+
+window.toggleMobileUpgrade = function() {
+  const p = document.getElementById('mobile-upgrade-panel');
+  p.classList.toggle('visible');
+};
 
 gameLoop();
 </script>

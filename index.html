@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tank.io — Çok Oyunculu</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0e1a; overflow:hidden; font-family:'Share Tech Mono',monospace; color:#e0e8ff; cursor:none; }
+  #gameCanvas { display:block; position:absolute; top:0; left:0; }
+
+  #ui { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+
+  #hud { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:8px; }
+  #xp-bar-wrap { width:320px; height:12px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:6px; overflow:hidden; }
+  #xp-bar { height:100%; background:linear-gradient(90deg,#3af0c0,#1ab8ff); width:0%; transition:width 0.3s; border-radius:6px; }
+  #level-text { font-family:'Orbitron',monospace; font-size:11px; font-weight:700; color:#7ae8ff; letter-spacing:2px; }
+  #health-bar-wrap { width:320px; height:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; overflow:hidden; }
+  #health-bar { height:100%; background:linear-gradient(90deg,#ff4466,#ff8844); width:100%; transition:width 0.2s; border-radius:4px; }
+
+  #score-display { position:absolute; top:20px; right:24px; text-align:right; font-family:'Orbitron',monospace; }
+  #score-label { font-size:10px; color:rgba(255,255,255,0.4); letter-spacing:3px; }
+  #score-value { font-size:28px; font-weight:900; color:#fff; line-height:1; }
+
+  #upgrade-panel { position:absolute; top:20px; left:20px; display:flex; flex-direction:column; gap:6px; pointer-events:all; }
+  .upgrade-btn { background:rgba(10,14,26,0.85); border:1px solid rgba(58,240,192,0.3); color:#3af0c0; font-family:'Share Tech Mono',monospace; font-size:11px; padding:6px 12px; cursor:pointer; border-radius:4px; transition:all 0.15s; letter-spacing:1px; min-width:190px; }
+  .upgrade-btn:hover { background:rgba(58,240,192,0.15); border-color:#3af0c0; color:#fff; }
+  .upgrade-btn:disabled { opacity:0.3; cursor:not-allowed; }
+  .upgrade-btn .pts { color:rgba(255,255,255,0.4); margin-left:4px; }
+  #upgrade-title { font-family:'Orbitron',monospace; font-size:10px; color:rgba(255,255,255,0.3); letter-spacing:3px; margin-bottom:2px; }
+  #points-display { font-family:'Orbitron',monospace; font-size:12px; color:#ffdd44; margin-bottom:4px; }
+
+  #leaderboard { position:absolute; top:20px; right:24px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:10px 14px; min-width:160px; margin-top:80px; }
+  #lb-title { font-size:9px; color:rgba(255,255,255,0.3); letter-spacing:3px; margin-bottom:8px; font-family:'Orbitron',monospace; }
+  .lb-row { font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; gap:12px; }
+  .lb-me { color:#7ae8ff; }
+
+  #minimap { position:absolute; bottom:24px; right:24px; width:100px; height:100px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; }
+  #minimap canvas { width:100%; height:100%; }
+
+  #kill-feed { position:absolute; top:20px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .kill-msg { font-size:11px; color:#ffdd44; letter-spacing:1px; animation:fadeOut 2.5s forwards; background:rgba(0,0,0,0.4); padding:3px 10px; border-radius:3px; }
+  @keyframes fadeOut { 0%{opacity:1;transform:translateY(0)} 70%{opacity:1} 100%{opacity:0;transform:translateY(-20px)} }
+
+  #player-count { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); font-size:10px; color:rgba(255,255,255,0.25); letter-spacing:2px; margin-bottom:80px; }
+
+  /* Death screen */
+  #death-screen { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; gap:20px; pointer-events:all; z-index:100; }
+  #death-screen.visible { display:flex; }
+  #death-title { font-family:'Orbitron',monospace; font-size:48px; font-weight:900; color:#ff4466; letter-spacing:4px; }
+  #death-score { font-size:18px; color:rgba(255,255,255,0.6); letter-spacing:2px; }
+  #restart-btn { font-family:'Orbitron',monospace; font-size:14px; font-weight:700; letter-spacing:3px; padding:14px 36px; background:transparent; border:2px solid #3af0c0; color:#3af0c0; cursor:pointer; border-radius:4px; transition:all 0.2s; pointer-events:all; }
+  #restart-btn:hover { background:#3af0c0; color:#0a0e1a; }
+
+  /* Name screen */
+  #name-screen { position:fixed; inset:0; background:#0a0e1a; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; z-index:200; }
+  #game-title { font-family:'Orbitron',monospace; font-size:56px; font-weight:900; color:#1ab8ff; letter-spacing:6px; text-shadow:0 0 40px rgba(26,184,255,0.4); }
+  #game-subtitle { font-size:12px; color:rgba(255,255,255,0.3); letter-spacing:4px; }
+  #name-input { background:rgba(255,255,255,0.05); border:1px solid rgba(58,240,192,0.4); color:#fff; font-family:'Share Tech Mono',monospace; font-size:18px; padding:12px 24px; border-radius:6px; outline:none; text-align:center; width:280px; letter-spacing:2px; }
+  #name-input:focus { border-color:#3af0c0; }
+  #play-btn { font-family:'Orbitron',monospace; font-size:14px; font-weight:700; letter-spacing:3px; padding:14px 48px; background:transparent; border:2px solid #3af0c0; color:#3af0c0; cursor:pointer; border-radius:4px; transition:all 0.2s; }
+  #play-btn:hover { background:#3af0c0; color:#0a0e1a; }
+  #connect-status { font-size:11px; color:rgba(255,255,255,0.3); letter-spacing:2px; }
+
+  #crosshair { position:fixed; width:20px; height:20px; pointer-events:none; z-index:50; transform:translate(-50%,-50%); }
+
+  #ping-display { position:absolute; bottom:8px; left:8px; font-size:9px; color:rgba(255,255,255,0.2); letter-spacing:1px; }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<!-- Name screen -->
+<div id="name-screen">
+  <div id="game-title">TANK.IO</div>
+  <div id="game-subtitle">ÇOK OYUNCULU</div>
+  <input id="name-input" type="text" placeholder="İSMİNİ GİR" maxlength="16" autocomplete="off"/>
+  <button id="play-btn" onclick="startGame()">OYNA</button>
+  <div id="connect-status">sunucuya bağlanıyor...</div>
+</div>
+
+<div id="ui">
+  <svg id="crosshair" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="4" stroke="rgba(255,255,255,0.8)" stroke-width="1"/>
+    <line x1="10" y1="0" x2="10" y2="6" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+    <line x1="10" y1="14" x2="10" y2="20" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+    <line x1="0" y1="10" x2="6" y2="10" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+    <line x1="14" y1="10" x2="20" y2="10" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+  </svg>
+
+  <div id="score-display">
+    <div id="score-label">SKOR</div>
+    <div id="score-value">0</div>
+  </div>
+
+  <div id="upgrade-panel">
+    <div id="upgrade-title">UPGRADE</div>
+    <div id="points-display">0 PUAN</div>
+    <button class="upgrade-btn" onclick="doUpgrade('bulletSpeed')">[1] MERMİ HIZI <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('bulletDamage')">[2] MERMİ HASARI <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('fireRate')">[3] ATEŞ HIZI <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('bodyDamage')">[4] VÜCUT HASARI <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('maxHealth')">[5] MAX CAN <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('moveSpeed')">[6] HAREKET HIZI <span class="pts"></span></button>
+    <button class="upgrade-btn" onclick="doUpgrade('bulletCount')">[7] ÇİFT NAMLU <span class="pts"></span></button>
+  </div>
+
+  <div id="leaderboard">
+    <div id="lb-title">SKOR TABLOSU</div>
+    <div id="lb-rows"></div>
+  </div>
+
+  <div id="hud">
+    <div id="level-text">SEVİYE 1</div>
+    <div id="xp-bar-wrap"><div id="xp-bar"></div></div>
+    <div id="health-bar-wrap"><div id="health-bar"></div></div>
+  </div>
+
+  <div id="minimap"><canvas id="minimapCanvas" width="100" height="100"></canvas></div>
+  <div id="kill-feed"></div>
+  <div id="player-count">0 oyuncu online</div>
+  <div id="ping-display">ping: --ms</div>
+</div>
+
+<div id="death-screen">
+  <div id="death-title">ÖLDÜN</div>
+  <div id="death-score"></div>
+  <button id="restart-btn" onclick="respawn()">YENİDEN BAŞLA</button>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const mctx = minimapCanvas.getContext('2d');
+const crosshair = document.getElementById('crosshair');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let socket, myId;
+let gameState = { players: {}, bullets: [], shapes: [] };
+let camera = { x: 0, y: 0 };
+let mouse = { x: canvas.width/2, y: canvas.height/2 };
+let keys = {};
+let myUpgrades = {};
+let myUpgradePoints = 0;
+let myScore = 0, myLevel = 1, myXP = 0, myXPNeeded = 100;
+let particles = [], floatingTexts = [];
+let WORLD = { w: 3000, h: 3000 };
+let pingStart = 0, ping = 0;
+let gameStarted = false;
+
+// Connect socket
+const socket_url = window.location.origin;
+socket = io(socket_url);
+
+socket.on('connect', () => {
+  document.getElementById('connect-status').textContent = 'bağlandı ✓';
+  document.getElementById('connect-status').style.color = '#3af0c0';
+});
+
+socket.on('disconnect', () => {
+  document.getElementById('connect-status').textContent = 'bağlantı kesildi';
+});
+
+socket.on('init', (data) => {
+  myId = data.id;
+  WORLD = data.world;
+  gameState.shapes = data.shapes;
+});
+
+socket.on('gameState', (state) => {
+  gameState = state;
+  const me = state.players[myId];
+  if (me && gameStarted) {
+    camera.x = me.x - canvas.width/2;
+    camera.y = me.y - canvas.height/2;
+    updateHUD(me);
+    updateLeaderboard(state.players);
+  }
+});
+
+socket.on('gainedScore', (data) => {
+  myScore = data.score;
+  myXP = data.xp;
+  myXPNeeded = data.xpNeeded;
+  myLevel = data.level;
+  myUpgradePoints = data.upgradePoints;
+  const me = gameState.players[myId];
+  if (me) addFloatingText(me.x, me.y - 30, '+' + (data.score - myScore + data.score), '#ffdd44');
+});
+
+socket.on('upgradeConfirm', (data) => {
+  myUpgrades = data.upgrades;
+  myUpgradePoints = data.upgradePoints;
+  updateUpgradePanel();
+});
+
+socket.on('youDied', (data) => {
+  document.getElementById('death-screen').classList.add('visible');
+  document.getElementById('death-score').textContent = `SKOR: ${myScore.toLocaleString()} | SEVİYE: ${myLevel} | ${data.killer} tarafından öldürüldün`;
+});
+
+socket.on('killedPlayer', (data) => {
+  addKillMsg(`${data.name} yok edildi! +200`);
+});
+
+socket.on('playerDied', (data) => {
+  if (data.id !== myId) addKillMsg(`${data.name} öldü`);
+});
+
+socket.on('respawned', (data) => {
+  document.getElementById('death-screen').classList.remove('visible');
+  myScore = data.player.score;
+  myLevel = data.player.level;
+  myXP = data.player.xp;
+  myXPNeeded = data.player.xpNeeded;
+});
+
+socket.on('playerLeft', (data) => {
+  delete gameState.players[data.id];
+});
+
+// Ping
+setInterval(() => {
+  pingStart = Date.now();
+  socket.emit('ping_custom');
+}, 2000);
+socket.on('pong_custom', () => {
+  ping = Date.now() - pingStart;
+  document.getElementById('ping-display').textContent = `ping: ${ping}ms`;
+});
+
+window.startGame = function() {
+  const name = document.getElementById('name-input').value.trim() || 'Oyuncu';
+  socket.emit('setName', name);
+  document.getElementById('name-screen').style.display = 'none';
+  gameStarted = true;
+};
+
+window.respawn = function() {
+  socket.emit('respawn');
+  myUpgrades = {};
+  myUpgradePoints = 0;
+  updateUpgradePanel();
+};
+
+window.doUpgrade = function(stat) {
+  socket.emit('upgrade', stat);
+};
+
+// Input loop
+setInterval(() => {
+  if (!gameStarted) return;
+  const me = gameState.players[myId];
+  if (!me || !me.alive) return;
+
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup'])    dy -= 1;
+  if (keys['s'] || keys['arrowdown'])  dy += 1;
+  if (keys['a'] || keys['arrowleft'])  dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+
+  const wx = mouse.x + camera.x;
+  const wy = mouse.y + camera.y;
+  const angle = Math.atan2(wy - me.y, wx - me.x);
+
+  socket.emit('input', { dx, dy, angle, shooting: keys['mouse'] });
+}, 16);
+
+// Drawing
+function drawGrid() {
+  const cs = 60;
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  const sx = Math.floor(camera.x/cs)*cs;
+  const sy = Math.floor(camera.y/cs)*cs;
+  for (let x = sx; x < camera.x+canvas.width+cs; x+=cs) {
+    ctx.beginPath(); ctx.moveTo(x-camera.x,0); ctx.lineTo(x-camera.x,canvas.height); ctx.stroke();
+  }
+  for (let y = sy; y < camera.y+canvas.height+cs; y+=cs) {
+    ctx.beginPath(); ctx.moveTo(0,y-camera.y); ctx.lineTo(canvas.width,y-camera.y); ctx.stroke();
+  }
+}
+
+function drawShape(s) {
+  const sx = s.x - camera.x, sy = s.y - camera.y;
+  if (sx < -60 || sx > canvas.width+60 || sy < -60 || sy > canvas.height+60) return;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(s.angle);
+  ctx.shadowColor = s.color; ctx.shadowBlur = 8;
+  ctx.fillStyle = s.color;
+  ctx.strokeStyle = shadeColor(s.color, -30);
+  ctx.lineWidth = 2.5;
+  if (s.type === 'square') {
+    ctx.beginPath(); ctx.rect(-s.radius,-s.radius,s.radius*2,s.radius*2); ctx.fill(); ctx.stroke();
+  } else if (s.type === 'triangle') {
+    ctx.beginPath();
+    for (let i=0;i<3;i++) { const a=(i/3)*Math.PI*2-Math.PI/2; i===0?ctx.moveTo(Math.cos(a)*s.radius,Math.sin(a)*s.radius):ctx.lineTo(Math.cos(a)*s.radius,Math.sin(a)*s.radius); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.beginPath();
+    for (let i=0;i<5;i++) { const a=(i/5)*Math.PI*2-Math.PI/2; i===0?ctx.moveTo(Math.cos(a)*s.radius,Math.sin(a)*s.radius):ctx.lineTo(Math.cos(a)*s.radius,Math.sin(a)*s.radius); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.shadowBlur = 0; ctx.restore();
+  if (s.health < s.maxHealth) {
+    const bw = s.radius*2.4;
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(sx-bw/2,sy-s.radius-12,bw,5);
+    ctx.fillStyle=s.color; ctx.fillRect(sx-bw/2,sy-s.radius-12,bw*(s.health/s.maxHealth),5);
+  }
+}
+
+function drawTank(p, isMe) {
+  const sx = p.x - camera.x, sy = p.y - camera.y;
+  if (sx < -80 || sx > canvas.width+80 || sy < -80 || sy > canvas.height+80) return;
+  ctx.save(); ctx.translate(sx, sy);
+  const barrels = (myUpgrades.bulletCount||0) > 0 && isMe ? 2 : ((p.upgrades?.bulletCount||0)>0 && !isMe ? 2 : 1);
+  for (let b=0;b<barrels;b++) {
+    ctx.save();
+    const bAng = p.angle + (barrels===2?(b===0?-0.2:0.2):0);
+    ctx.rotate(bAng);
+    ctx.fillStyle = isMe ? '#0d8cbf' : shadeColor(p.color, -40);
+    ctx.strokeStyle = isMe ? '#0a6a96' : shadeColor(p.color, -70);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.rect(0,-7,42,14); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowColor = p.color; ctx.shadowBlur = isMe?18:10;
+  ctx.fillStyle = p.color;
+  ctx.strokeStyle = shadeColor(p.color,-40);
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0,0,p.radius,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,p.radius*0.6,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // Name tag
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.font='11px Share Tech Mono';
+  ctx.textAlign='center';
+  const nw = ctx.measureText(p.name).width;
+  ctx.fillRect(sx-nw/2-4, sy-p.radius-28, nw+8, 16);
+  ctx.fillStyle = isMe ? '#7ae8ff' : '#fff';
+  ctx.fillText(p.name, sx, sy-p.radius-16);
+  ctx.restore();
+
+  // Health bar
+  const bw = p.radius*3;
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(sx-bw/2,sy-p.radius-14,bw,6);
+  ctx.fillStyle=isMe?'#3af0c0':'#ff4466'; ctx.fillRect(sx-bw/2,sy-p.radius-14,bw*(p.health/p.maxHealth),6);
+}
+
+function drawBullet(b) {
+  const sx = b.x - camera.x, sy = b.y - camera.y;
+  if (sx < -20 || sx > canvas.width+20 || sy < -20 || sy > canvas.height+20) return;
+  ctx.save();
+  ctx.shadowColor = b.color; ctx.shadowBlur = 10;
+  ctx.fillStyle = b.color;
+  ctx.strokeStyle = shadeColor(b.color, -20); ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(sx, sy, b.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur=0; ctx.restore();
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life/p.maxLife;
+    ctx.shadowColor=p.color; ctx.shadowBlur=6;
+    ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x-camera.x,p.y-camera.y,p.radius*(p.life/p.maxLife),0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawFloatingTexts() {
+  floatingTexts.forEach(t => {
+    ctx.save();
+    ctx.globalAlpha=t.life/60;
+    ctx.fillStyle=t.color;
+    ctx.font='bold 13px Share Tech Mono'; ctx.textAlign='center';
+    ctx.fillText(t.text, t.x-camera.x, t.y-camera.y);
+    ctx.restore();
+  });
+}
+
+function drawMinimap() {
+  mctx.clearRect(0,0,100,100);
+  mctx.fillStyle='rgba(0,0,0,0.3)'; mctx.fillRect(0,0,100,100);
+  const sx=100/WORLD.w, sy=100/WORLD.h;
+  gameState.shapes.forEach(s => {
+    mctx.fillStyle=s.color; mctx.globalAlpha=0.6;
+    mctx.beginPath(); mctx.arc(s.x*sx,s.y*sy,1.5,0,Math.PI*2); mctx.fill();
+  });
+  Object.entries(gameState.players).forEach(([id,p]) => {
+    mctx.fillStyle = id===myId?'#1ab8ff':'#ff4466';
+    mctx.globalAlpha=1;
+    mctx.beginPath(); mctx.arc(p.x*sx,p.y*sy,id===myId?3:2,0,Math.PI*2); mctx.fill();
+    if (id===myId) { mctx.strokeStyle='#fff'; mctx.lineWidth=1; mctx.stroke(); }
+  });
+  mctx.strokeStyle='rgba(255,255,255,0.25)'; mctx.lineWidth=0.5;
+  mctx.strokeRect(camera.x*sx,camera.y*sy,canvas.width*sx,canvas.height*sy);
+}
+
+function spawnParticles(x,y,color,count=8) {
+  for(let i=0;i<count;i++) {
+    const a=Math.random()*Math.PI*2, s=1+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,radius:3+Math.random()*4,color,life:30+Math.random()*20,maxLife:50});
+  }
+}
+
+function addFloatingText(x,y,text,color='#ffdd44') {
+  floatingTexts.push({x,y,text,color,life:60,vy:-1.2});
+}
+
+function addKillMsg(msg) {
+  const feed=document.getElementById('kill-feed');
+  const el=document.createElement('div'); el.className='kill-msg'; el.textContent=msg;
+  feed.appendChild(el); setTimeout(()=>el.remove(),2500);
+}
+
+function updateHUD(me) {
+  document.getElementById('score-value').textContent = me.score?.toLocaleString() || '0';
+  document.getElementById('level-text').textContent = `SEVİYE ${me.level||1}`;
+  const xp = gameState.players[myId];
+  document.getElementById('health-bar').style.width = (me.health/me.maxHealth*100)+'%';
+  document.getElementById('player-count').textContent = Object.keys(gameState.players).length + ' oyuncu online';
+}
+
+function updateLeaderboard(players) {
+  const sorted = Object.entries(players).sort((a,b)=>b[1].score-a[1].score).slice(0,8);
+  const rows = document.getElementById('lb-rows');
+  rows.innerHTML = sorted.map(([id,p],i)=>
+    `<div class="lb-row ${id===myId?'lb-me':''}">`+
+    `<span>${i+1}. ${p.name||'?'}</span><span>${(p.score||0).toLocaleString()}</span></div>`
+  ).join('');
+}
+
+function updateUpgradePanel() {
+  const statKeys = ['bulletSpeed','bulletDamage','fireRate','bodyDamage','maxHealth','moveSpeed','bulletCount'];
+  const btns = document.querySelectorAll('.upgrade-btn');
+  btns.forEach((btn,i) => {
+    const k = statKeys[i];
+    const lv = myUpgrades[k]||0;
+    const pts = btn.querySelector('.pts');
+    if (lv>=7) { btn.disabled=true; pts.textContent='[MAX]'; }
+    else { btn.disabled=myUpgradePoints<=0; pts.textContent=`[${lv}/7]`; }
+  });
+  document.getElementById('points-display').textContent = myUpgradePoints + ' PUAN';
+}
+
+function shadeColor(hex,pct) {
+  try {
+    const num=parseInt(hex.replace('#',''),16);
+    const r=Math.max(0,Math.min(255,(num>>16)+pct));
+    const g=Math.max(0,Math.min(255,((num>>8)&0xff)+pct));
+    const b=Math.max(0,Math.min(255,(num&0xff)+pct));
+    return `rgb(${r},${g},${b})`;
+  } catch(e) { return hex; }
+}
+
+let prevBullets = [];
+function gameLoop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#0a0e1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawGrid();
+
+  // World border
+  ctx.strokeStyle='rgba(58,240,192,0.3)'; ctx.lineWidth=3;
+  ctx.strokeRect(-camera.x,-camera.y,WORLD.w,WORLD.h);
+
+  gameState.shapes?.forEach(s => drawShape(s));
+  gameState.bullets?.forEach(b => drawBullet(b));
+  Object.entries(gameState.players||{}).forEach(([id,p]) => {
+    if (p.alive) drawTank(p, id===myId);
+  });
+
+  // Particles
+  particles = particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=0.92;p.vy*=0.92;p.life--;return p.life>0;});
+  floatingTexts = floatingTexts.filter(t=>{t.y+=t.vy;t.life--;return t.life>0;});
+  drawParticles(); drawFloatingTexts();
+  drawMinimap();
+  updateUpgradePanel();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Input
+document.addEventListener('mousemove',e=>{
+  mouse.x=e.clientX; mouse.y=e.clientY;
+  crosshair.style.left=e.clientX+'px'; crosshair.style.top=e.clientY+'px';
+});
+document.addEventListener('mousedown',e=>{if(e.button===0)keys['mouse']=true;});
+document.addEventListener('mouseup',e=>{if(e.button===0)keys['mouse']=false;});
+document.addEventListener('keydown',e=>{
+  keys[e.key.toLowerCase()]=true;
+  const m={'1':'bulletSpeed','2':'bulletDamage','3':'fireRate','4':'bodyDamage','5':'maxHealth','6':'moveSpeed','7':'bulletCount'};
+  if(m[e.key]) doUpgrade(m[e.key]);
+});
+document.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('resize',()=>{canvas.width=window.innerWidth;canvas.height=window.innerHeight;});
+document.getElementById('name-input').addEventListener('keydown',e=>{if(e.key==='Enter')startGame();});
+
+gameLoop();
+</script>
+</body>
+</html>
